@@ -1,0 +1,50 @@
+name: Hourly Iran Market News Bot
+
+on:
+  schedule:
+    # هر ساعت، در دقیقه صفر (به وقت UTC)
+    - cron: "0 * * * *"
+  workflow_dispatch: {}   # امکان اجرای دستی از تب Actions در گیت‌هاب
+
+permissions:
+  contents: write   # لازم است تا اسکریپت بتواند seen.json به‌روزشده را کامیت کند
+
+concurrency:
+  group: iran-market-news-bot
+  cancel-in-progress: false
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run news bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+        run: python scripts/fetch_and_post.py
+
+      - name: Commit updated seen.json
+        run: |
+          git config user.name "iran-market-news-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -n "$(git status --porcelain seen.json)" ]; then
+            git add seen.json
+            git commit -m "chore: update seen.json [skip ci]"
+            git push
+          else
+            echo "No changes to seen.json"
+          fi
